@@ -1,13 +1,17 @@
 {
   "name": "dev-skills",
   "owner": {
-    "name": "Foo Jia Yin",
-    "email": "candy23198@gmail.com"
+    "name": "Dropout Tech",
+    "url": "https://github.com/dropout-tech"
   },
   "plugins": [
     {
       "name": "dev-skills",
-      "source": "./",
+      "source": {
+        "source": "github",
+        "repo": "dropout-tech/dev-skills",
+        "ref": "main"
+      },
       "description": "A collection of reusable Agent Skills for software development workflows."
     }
   ]

@@ -140,7 +140,7 @@ dev-skills/
 From GitHub:
 
 ```
-/plugin marketplace add FooJiaYin/dev-skills
+/plugin marketplace add dropout-tech/dev-skills
 /plugin install dev-skills
 ```
 
@@ -158,13 +158,13 @@ For local development against a clone:
 Install all skills from this repo (user-level / global):
 
 ```
-gemini skills install https://github.com/FooJiaYin/dev-skills.git --path skills
+gemini skills install https://github.com/dropout-tech/dev-skills.git --path skills
 ```
 
 Project-level install:
 
 ```
-gemini skills install https://github.com/FooJiaYin/dev-skills.git --path skills --scope workspace
+gemini skills install https://github.com/dropout-tech/dev-skills.git --path skills --scope workspace
 ```
 
 Or, if you've cloned the repo locally, link it for live updates:
@@ -180,9 +180,9 @@ Verify with `gemini skills list`, or `/skills reload` inside an active session.
 The [`gh skill`](https://cli.github.com/manual/gh_skill) command can install individual skills from this repo into any supported agent:
 
 ```bash
-gh skill install FooJiaYin/dev-skills <skill-name> --agent claude-code --scope user
-gh skill install FooJiaYin/dev-skills <skill-name> --agent gemini-cli --scope user
-gh skill install FooJiaYin/dev-skills <skill-name>                         # defaults to github-copilot, project scope
+gh skill install dropout-tech/dev-skills <skill-name> --agent claude-code --scope user
+gh skill install dropout-tech/dev-skills <skill-name> --agent gemini-cli --scope user
+gh skill install dropout-tech/dev-skills <skill-name>                         # defaults to github-copilot, project scope
 ```
 
 `<skill-name>` is one of: `code-review`, `create-tasks`, `discuss`, `fetch-task`, `find-session`, `meeting-notes`, `rename-session`, `report`, `setup-notion`, `spec`, `spec-review`, `sync`, `sync-report`, `update-docs`, `upload-meeting`, `verify`, `wrap-up`. See [`gh skill install`](https://cli.github.com/manual/gh_skill_install) for the full list of supported agents and flags.
