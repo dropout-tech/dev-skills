@@ -1,15 +1,23 @@
 ---
 name: code-review
-description: Multi-agent review of the local git diff. Spawns parallel agents covering bugs+security, CLAUDE.md adherence, git history, performance, plan adherence, and quality+architecture; tiers findings by confidence (Critical/Warning/Suggestion/Nit) and drops only auto-zeroed false positives; writes REVIEW.md. Use when the user says "review my changes", "review this branch", "code review", or invokes /code-review.
+description: Multi-agent review of the local git diff. Spawns parallel agents covering bugs+security, CLAUDE.md adherence, git history, performance, plan adherence, and quality+architecture; tiers findings by confidence (Critical/Warning/Suggestion/Nit) and drops only auto-zeroed false positives; writes REVIEW.md. Also has a whole-tree mode (`/code-review tree [glob]`, or wording like 「審核架構／有沒有重複」) that audits the current source for duplication and missing abstractions instead of a diff. Use when the user says "review my changes", "review this branch", "code review", "審核架構", or invokes /code-review. Supersedes the built-in /code-review in repos using dev-skills — invoke only this one.
 ---
 
 # Code Review
 
-You are the orchestrator of a multi-agent code review. You do not analyze code yourself — you fan out to specialized subagents, collect their findings, score them for confidence, and write a single `REVIEW.md` artifact.
+You are the orchestrator of a multi-agent code review. When delegation is available, fan out to specialized subagents, collect their findings, score them for confidence, and write a single `REVIEW.md` artifact. Otherwise perform the same review passes locally and disclose that no independent reviewers ran.
+
+## Instruction-source compatibility
+
+The legacy `claude-md` agent name, `claude_md_paths` field, and `{CLAUDE_MD_PATHS}` placeholder represent applicable project instructions from **both `AGENTS.md` and `CLAUDE.md`**. Pass this binding explicitly to every reviewer and scorer. References below to CLAUDE.md rules include those AGENTS.md rules; cite the actual source file verbatim. Label the report section "Project Instruction Adherence".
 
 ## Inputs
 
 The user may pass a base ref (e.g. `main`, `HEAD~3`) or a plan file path. If neither, infer them in Phase 0 / Phase 1.
+
+**Tree mode.** If the user passes `tree [glob]` or asks for a whole-codebase architecture / duplication audit (「審核現在的架構」「有沒有大量重複」), do NOT diff. Scope = the glob (default `src/**` minus generated files), working tree as-is. Skip Phase 1's diff intent; in Phase 2 spawn instead: one `quality-architecture` agent **per top-level area** (e.g. `app/(main)/products`, `app/(main)/admin`, `app/(main)/suppliers` + shared) plus **one cross-cutting duplication agent** over the whole scope (hunts pattern families with grep: action-runner boilerplate, page shells, table/select/label scaffolds, enum lists, repeated Tailwind strings), plus `claude-md`; `bugs-security` / `performance` optional, `git-history` / `plan-adherence` skipped. Tell every agent the ENTIRE file content is in scope and each duplication finding must cite ALL locations + a proposed abstraction (name, signature, home). In Phase 3 pass the rubric verbatim **plus an override note**: false-positive categories 1 and 8 do not apply in tree mode; concrete, location-cited duplication is the requested deliverable, not a "general code-quality complaint". Frontmatter `base`/`head` = current HEAD + "working tree"; add a `scope:` line.
+
+Only one review orchestrator per session: this skill replaces the built-in `/code-review` — if built-in finder agents are already running, fold their reports into the finding pool instead of re-fanning out.
 
 ## Orchestrator Flow
 
@@ -31,20 +39,20 @@ The user may pass a base ref (e.g. `main`, `HEAD~3`) or a plan file path. If nei
    ```
 4. If the resulting list is empty: write `REVIEW.md` with `status: skipped` (template below) and stop.
 
-### Phase 1 — Context Gathering (one Haiku agent, sequential)
+### Phase 1 — Context Gathering (one agent, sequential)
 
-Spawn a single Haiku agent with this task:
+Spawn a single context agent (Claude: Haiku; Codex: inherited model) with this task:
 
 > Given the file list `<FILES>` and repo root, return:
-> 1. The path to the root `CLAUDE.md` if it exists, plus any `CLAUDE.md` in the directories of changed files. **Paths only, do not read contents.**
+> 1. The paths to applicable `AGENTS.md` and compatibility `CLAUDE.md` files from the root through the changed-file directories. Deduplicate symlinks; prefer `AGENTS.md` in the same directory. **Paths only, do not read contents.**
 > 2. The path to a plan/spec file if one exists. Look in: a path the user passed (`<PLAN_HINT>`), `.planning/`, `docs/plans/`, `docs/specs/`, root `PLAN.md`. Return the first match or `null`.
 > 3. A 1–2 sentence summary of the diff's apparent intent, based on `git diff --stat $BASE..HEAD` and the file paths. Do not read file contents.
 
 Store the result as `CONTEXT = {claude_md_paths, plan_path, intent_summary}`.
 
-### Phase 2 — Parallel Fan-Out (6 Sonnet agents in ONE tool-call block)
+### Phase 2 — Parallel Fan-Out (six review agents)
 
-Spawn all six in a single message. Each receives `BASE`, `HEAD`, the file list, and `CONTEXT`. Each returns `[{description, evidence, source_aspect}]` where `source_aspect` is one of `bugs-security`, `claude-md`, `git-history`, `performance`, `plan-adherence`, `quality-architecture`.
+Claude: prefer Sonnet reviewers. Codex: inherit the parent model. Spawn reviewers up to the available concurrency limit, then continue in batches until all six aspects are covered. Each receives `BASE`, `HEAD`, the file list, and `CONTEXT`. Each returns `[{description, evidence, source_aspect}]` where `source_aspect` is one of `bugs-security`, `claude-md`, `git-history`, `performance`, `plan-adherence`, `quality-architecture`.
 
 Agent prompts live in:
 - `agents/bugs-security.md`
@@ -58,9 +66,9 @@ Read the prompt file, substitute `{BASE}`, `{HEAD}`, `{FILES}`, `{CLAUDE_MD_PATH
 
 **Agent modes:** Agents `bugs-security`, `quality-architecture`, and `performance` operate in **adversarial-recall mode** — surface every plausible candidate; the downstream confidence filter prunes false positives. Agents `claude-md`, `git-history`, and `plan-adherence` operate in **citation-only mode** — every finding must quote a verbatim source (CLAUDE.md rule, commit/PR reference, or plan section). Both modes feed the same Phase 3 scorer.
 
-### Phase 3 — Confidence Scoring (parallel Haiku agents, one per finding)
+### Phase 3 — Confidence Scoring (one scorer per finding)
 
-For each finding from Phase 2, spawn a Haiku scorer in parallel (single tool-call block). The scorer receives:
+For each finding from Phase 2, spawn a scorer (Claude: Haiku; Codex: inherited model), using bounded parallel batches. Check its status before retrying a failed scorer; do not restart user-interrupted work without authorization. If delegation is unavailable, score locally and disclose the loss of independent scoring. The scorer receives:
 - The finding (`description`, `evidence`, `source_aspect`)
 - The diff (`git diff $BASE..HEAD` for the affected file)
 - The CLAUDE.md path list
@@ -295,6 +303,6 @@ If the user asks to fix the findings after `REVIEW.md` is written: group finding
 - **Don't run typecheck / lint / tests.** CI handles those.
 - **Cite `file:line` for every finding.** Never "somewhere in this file".
 - **Skip findings on lines the diff doesn't touch.**
-- **Phase 2 must be parallel.** Spawn all six fan-out agents in a single tool-call block, not sequentially.
-- **Phase 3 must be parallel.** Spawn all scorers in one tool-call block.
+- **Phase 2:** use parallel agents within the host's available slots; use the disclosed local fallback if delegation is unavailable.
+- **Phase 3:** batch independent scorers within the host's available slots.
 - **Don't paraphrase the rubric or false-positive list when passing to scorer agents** — copy them verbatim.

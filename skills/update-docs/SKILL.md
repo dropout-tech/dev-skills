@@ -1,8 +1,9 @@
 ---
 name: update-docs
 description: Detection-driven docs updater. Scans the project's doc layout, classifies the diff (schema / api / service / component / design / infra), proposes a per-file update plan, and edits only after user confirmation. Use when the user says "update the docs", "sync docs", "are the docs up to date?", "audit doc drift", or invokes /update-docs. Also invoked by /wrap-up step 3.
-argument-hint: "[scope: default=uncommitted | <commit> | <range> | --pr <num> | --all]"
 ---
+
+**Arguments:** `[scope: default=uncommitted | <commit> | <range> | --pr <num> | --all]`
 
 # update-docs — detection-driven docs updater
 
@@ -17,6 +18,8 @@ Parse the argument (or default):
 - **A range** like `HEAD~3..HEAD` — `git diff <range>`.
 - **`--pr <num>`** — fetch with `gh pr diff <num>`.
 - **`--all`** — audit-mode: walk the whole repo, looking for code/doc drift rather than per-diff updates.
+
+**Fallback when the default scope is empty of your work.** Run right after a commit (e.g. straight after `/wrap-up`), the uncommitted diff holds only other people's leftovers — the work that needs documenting is already in `HEAD`. If the uncommitted diff is empty, or contains nothing this session wrote, scope to `HEAD` instead and say so in the proposal. A commit is also the moment docs go stale: check whether any doc describes the files you just committed as pending/untracked.
 
 ## 2. Detect doc layout
 

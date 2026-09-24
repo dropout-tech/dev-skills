@@ -54,8 +54,8 @@ Four phases — **start-of-day sync**, **planning**, **wrap-up**, and **session 
 | [verify](skills/verify/SKILL.md) | wrap-up | Executes the implementation plan's Test plan / Verification section. **Runner, not author** — does not write new tests. |
 | [update-docs](skills/update-docs/SKILL.md) | wrap-up | Detection-driven docs updater. Scans the project's doc layout, classifies the diff, and proposes per-file edits. |
 | [code-review](skills/code-review/SKILL.md) | wrap-up | Multi-agent review of the local git diff. Writes a single `REVIEW.md` with findings tiered Critical/Warning/Suggestion/Nit (drops only auto-zeroed false positives). |
-| [report](skills/report/SKILL.md) | wrap-up | Distills the conversation, file changes, and decisions into `docs/reports/YYYY-MM-DD-[title].md`. |
-| [rename-session](skills/rename-session/SKILL.md) | housekeeping | Renames the current Claude Code session JSONL with a short title. Auto-invoked after `report` runs. |
+| [report](skills/report/SKILL.md) | wrap-up | Distills the conversation, file changes, and decisions into `docs/reports/YYYY-MM-DD-[title].md`. `/report transcript` exports the raw conversation instead, listing the files read/modified. |
+| [rename-session](skills/rename-session/SKILL.md) | housekeeping | Renames the current Claude Code or Codex session with a short title. Auto-invoked after `report` runs. |
 | [wrap-up](skills/wrap-up/SKILL.md) | orchestrator | Two modes. **Full** runs `verify → update-docs → code-review → report → rename-session → cleanup → commit → deploy → improve` for the primary developer. **Quick** skips quality/deploy gates and ships report + safe commit + push only — for time-constrained or git-illiterate collaborators, or when auto-invoked from `/sync`. |
 
 **How to use:**
@@ -113,7 +113,8 @@ These skills bridge between local code/docs and a shared Notion workspace (Roadm
 
 | Skill | Purpose |
 |---|---|
-| [find-session](skills/find-session/SKILL.md) | Search Claude Code session transcripts (`~/.claude/projects/`) by topic keyword or by which files were touched. Returns session UUIDs for `claude --resume`. |
+| [find-session](skills/find-session/SKILL.md) | Search Claude Code or Codex sessions by topic or file-change evidence; `--open` refreshes/opens the log. Searches both by default; `--host` filters the source. |
+| [headless-shots](skills/headless-shots/SKILL.md) | Screenshot or drive a locally running web app via headless Chrome + CDP with a minted login cookie — fallback when the Playwright MCP browser is locked; write-path checks verified against the DB. |
 
 ## Folder Structure
 
@@ -152,6 +153,56 @@ For local development against a clone:
 /plugin marketplace add ~/dev-skills
 /plugin install dev-skills@dev-skills
 ```
+
+Session operations use one cross-host entry point: `bin/session-adapter.py`
+provides `show`, `rename`, `export`, and Codex `log`, then delegates to the Claude Code or
+Codex backend. `bin/codex-session.py` remains as a compatibility shim.
+
+### Codex working logs
+
+`bin/session-adapter.py log --open` refreshes and opens a derived `.log.md` for
+this Codex session. `--watch` refreshes while running; configured lifecycle
+hooks refresh automatically after `/hooks` trust review. See
+[Codex session log hooks](docs/hooks-codex-session-log.md). `skills/find-session/scripts/search.py --host codex` searches
+persisted App Server history and `--open-id current` opens the current log.
+`session-log.py` also routes show/note/writes/export to Codex when its thread ID
+is exposed. Write evidence covers completed `fileChange` events only, not shell
+or MCP writes; the compatibility export applies credential-pattern redaction.
+Claude history remains available through `--host claude`.
+
+In shared skill instructions, Claude Code's `AskUserQuestion` maps to Codex's
+`request_user_input` whenever that tool is exposed by the current host. Use the
+host's approval mechanism for shell permissions; fall back to a concise chat
+question only when the structured input tool is unavailable.
+
+### Codex (local clone)
+
+Link each skill from the clone into `~/.codex/skills/`. For this workspace the
+20 links already point to `~/agent-skills/dev-skills/skills/<name>`; edits are
+available through those links without copying or reinstalling. Invoke a skill
+with `$wrap-up`, `$verify`, or its name in your request.
+
+Keep the entire clone for skills that use `bin/` helpers. Session operations
+use `bin/session-adapter.py` to resolve the host, identity, and backend in code.
+Skills describe their own task-specific commands; they do not load a mandatory
+compatibility preamble. The [runtime reference](references/agent-runtime.md) is
+optional maintainer documentation for troubleshooting host differences.
+
+The shared workflow supports both Claude Code and Codex. Codex uses its own
+available tools, approval UI, inherited review-agent model, and session identity.
+Claude-specific `argument-hint` frontmatter has been moved into the skill body
+as **Arguments** so both hosts can parse the same metadata.
+
+| Capability | Codex behavior |
+|---|---|
+| Planning, verification, reports, reviews | Shared workflow with host tool mappings |
+| Notion operations | Require an available, authenticated connection; use its actual schemas |
+| Session search | Searches Claude + Codex by default; `--host codex` or `--host claude` restricts the source |
+| Session rename | `bin/session-adapter.py rename` selects the host and verifies the saved title |
+| Raw transcript export | `bin/session-adapter.py export` selects the host exporter; Codex pages persisted turns |
+| Working log | `session-adapter.py log --open` refreshes and opens a persistent `.log.md`; `--watch` polls while running; local notes survive refresh |
+| Write attribution | Completed `fileChange` events only; shell writes and Claude hunk snapshots are not inferred |
+| Session-log hooks | Four user hooks configured locally; `/hooks` trust review is required before they run. See [hook setup](docs/hooks-codex-session-log.md) |
 
 ### Gemini CLI
 

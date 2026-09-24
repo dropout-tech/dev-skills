@@ -1,6 +1,6 @@
 ---
 name: fetch-task
-description: Pull a Notion task into a local working file at docs/tasks/<slug>.md. Creates the file on first run; on subsequent runs, refreshes only the managed `# Context` section + frontmatter `last_synced` while preserving every other section byte-identical. With no args, shows a picker of the current user's active tasks (Current view, Assignee == me). Use when the user says "/fetch-task", "fetch task", "check out this Notion task", or passes a Notion task URL.
+description: Pull a Notion task into a local working file at docs/tasks/task-slug.md. Creates the file on first run; on subsequent runs, refreshes only the managed `# Context` section + frontmatter `last_synced` while preserving every other section byte-identical. With no args, shows a picker of the current user's active tasks (Current view, Assignee == me). Use when the user says "/fetch-task", "fetch task", "check out this Notion task", or passes a Notion task URL.
 ---
 
 # fetch-task — Notion task → local working file
@@ -34,9 +34,9 @@ If config is missing → dispatch `/setup-notion`, then re-read and continue.
   - Options: top ~5 candidates from `notion-search` on workspace users by name/email if available, plus a "Paste user ID" escape hatch.
   - On selection, write the resolved Notion user ID to `~/.claude/memory/notion-me.md`. **Do not** write the per-dev ID into `AGENTS.md`.
 - Query the Roadmap data source's `Current` view (by name; fall back to first non-Completed view) filtered by `Assignee == me`.
-- Present results via `AskUserQuestion` (multi-select):
+- Present results via `AskUserQuestion` (multi-select). **The tool caps at 4 options**, so scope first: filter to this repo's Project (AGENTS.md `Project (<repo>)` line if present, else the Project shared by the repo's existing `docs/tasks/` files / meeting notes); if still >4, show the 4 most recent by Time and say the rest are reachable via Other (paste URL).
   - Columns: Name · Status · Project · Time
-  - Plus a "Paste URL" escape hatch and "Cancel".
+  - The auto-provided Other doubles as the "Paste URL" escape hatch; no separate "Cancel" option needed.
 - Selected URLs flow into the per-URL loop below.
 
 ### 3. For each URL
@@ -49,10 +49,12 @@ If config is missing → dispatch `/setup-notion`, then re-read and continue.
 
 `docs/tasks/<slug>.md` where:
 - `<slug>` = task Name, lowercased, path-unsafe chars replaced with `-`, collapsed runs of `-`, truncated to ~60 chars.
-- Appended with `-<hash6>` where `<hash6>` is the first 6 hex chars of the Notion page ID (UUID's hyphens stripped). This protects against name collisions and rename-after-fetch.
+- Appended with `-<hash6>` where `<hash6>` is the **last** 6 hex chars of the Notion page ID (UUID's hyphens stripped). This protects against name collisions and rename-after-fetch. Use the trailing chars, **not** the leading ones — pages created in the same batch share a long leading prefix, so leading-6 collides (e.g. two sibling tasks both → `-37fb0e`), defeating the tiebreak.
 - Create `docs/tasks/` directory if missing.
 
 #### 3c. Write or refresh
+
+When transcribing the fetched body, strip `notion-fetch`'s wrapper tags (`<page>`, `<content>`, `<properties>`, `<ancestor-path>`, closing `</…>`) — write only the inner `# Context` markdown. The closing `</content>` in particular leaks into the file if copied verbatim.
 
 **File doesn't exist (first fetch)** → write the full file:
 

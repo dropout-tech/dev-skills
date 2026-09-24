@@ -1,6 +1,6 @@
 ---
 name: create-tasks
-description: Turn a meeting note into Notion tasks. Extracts commitments from the meeting body, classifies each as LINK / DRAFT / SKIP, pre-matches against the Roadmap's Current view, renders a plan-mode preview for user iteration, and on approval creates new tasks, appends meeting context to linked tasks (inside `# Context` only), wires up the meeting's Tasks relation, and rewrites the original commitment text inline as `<mention-page>` references. Use when the user says "/create-tasks", "extract tasks from meeting", "turn this meeting into tasks", or passes a Notion meeting URL / local markdown / pasted notes.
+description: Turn a meeting note into Notion tasks. Extracts commitments from the meeting body, classifies each as LINK / DRAFT / SKIP, pre-matches against the Roadmap's Current view, renders a plan-mode preview for user iteration, and on approval creates new tasks, appends meeting context to linked tasks (inside `# Context` only), wires up the meeting's Tasks relation, and rewrites the original commitment text inline as Notion page-mention references. Use when the user says "/create-tasks", "extract tasks from meeting", "turn this meeting into tasks", or passes a Notion meeting URL / local markdown / pasted notes.
 ---
 
 # create-tasks — meeting → Notion tasks
@@ -11,8 +11,20 @@ Authority: **Notion is master.** This skill is one of only two skills that write
 
 - A Notion meeting page URL → use as-is.
 - A local markdown file path / Google Docs URL / pasted text → run the non-Notion preflight below.
+- A **chat-app thread URL** (Discord / Slack channel or thread) → run the **Chat-app source** branch below (no Notion meeting page; treat as Standalone source).
 
 "Source page" throughout the rest of the skill means meeting page, custom parent, or none (Standalone).
+
+### Chat-app source (Discord / Slack)
+
+No fetch API — drive the **already-authenticated browser via Playwright MCP** (`browser_navigate` to the thread URL, then `browser_snapshot`). If it lands on the channel (not a login wall), it's logged in.
+
+- **Read EVERY message, reply-threaded — do NOT keyword-search.** Parse each message's `author · timestamp · text · reply-target` from the accessibility tree (Discord: article `aria-label` carries author+text+time; the reply header `generic "<A> replying to <B>"` + the quoted-preview button gives the reply-target). A keyword grep silently skips messages and mis-attributes replies — the user will catch it.
+- **Scroll to load virtualized / older messages.** Chat lists virtualize: the first snapshot is only the bottom slice. Scroll the message scroller up/down (`browser_evaluate` set `scrollTop`) and re-snapshot until you've covered the requested date range. Don't trust one viewport.
+- **Map all messages → task / RESOLVED / META / COORD**, then build tasks from the actionable ones. Adjacent messages by different people are often **one issue** (group them); one message can carry **two** issues (split).
+- **Honor resolution markers.** A later reply like `已修 / 都改了 / 那沒事 / 那我沒問題了 / 先略過` (resolved/deferred) means the item is **already fixed or dropped** — don't create it as a task; note it RESOLVED in the map. Check the reply-target before mapping (the resolving reply may point back at an earlier message).
+- **Media:** image/screenshot attachments are readable (screenshot the element via Playwright → Read the PNG). **Video can't be transcribed** — rely on the message caption + a still frame.
+- Save the full reply-threaded `message# → task` map (e.g. to `docs/tasks/_map-<date>-<channel>.md`) so the mapping is auditable.
 
 ## Flow
 
@@ -21,6 +33,8 @@ Authority: **Notion is master.** This skill is one of only two skills that write
 Read `AGENTS.md` (preferred) / `CLAUDE.md`. Locate the `## Notion` section. Extract Roadmap DB URL, Meetings DB URL, optional **Meetings title format** line, and optional `### Team` roster.
 
 If either DB URL is missing → dispatch `/setup-notion`, then re-read `AGENTS.md` from scratch and continue. Do not pass state in to setup; do not assume it succeeded — re-validate.
+
+**Dispatch it — do not improvise around it.** Never hand-crawl the workspace (`notion-search` / `notion-fetch` on random pages) to reconstruct DB URLs yourself, and never report an unresolved assignee as blocking before setup has run. `/setup-notion` imports a parent-directory `../AGENTS.md` `## Notion` section — **roster included** — which routinely already holds the guest user-ids a workspace user-search cannot return.
 
 ### 2. Resolve input source
 
@@ -49,9 +63,13 @@ Meeting-shape heuristic: input is meeting-shaped if ≥2 of {date marker like `2
 
 From this point, operate on the resolved source page — or, for the Standalone branch, on the raw input text with no source page.
 
+**Design-discussion carryover.** When the task request follows a design discussion and the user has selected or approved an approach, treat the settled design text as source material for the task. Preserve it verbatim as an optional `# Plan` section; do not collapse it into a synthesized objective, context, or acceptance summary. A concise summary may supplement the copied plan, but never replace it.
+
 Meetings-DB title format is owned by `/upload-meeting` (it reads AGENTS.md's `Meetings title format` and applies it). Custom-parent uploads (handled inline here) use the first H1 / filename verbatim as the title.
 
 ### 3. Fetch meeting + active task pool
+
+**Reuse a prior import of the same source first.** Before treating rows as Standalone, grep `docs/tasks/_plan-*.md` (and `docs/reports/*`) for an earlier import of the same source (e.g. a feature-list / backlog import). If one exists, it usually holds the **parent-Feature notion ids**, the per-row property conventions (assignee policy, priority mapping, `# Context` body shape), and a list of already-created ids. Reuse those conventions and **dedup against its ids** instead of re-deriving from scratch or re-creating duplicates.
 
 In parallel:
 - `notion-fetch` the meeting page → body markdown, Participants, Project relation, **existing `Tasks` relation list** (for idempotency).
@@ -83,7 +101,7 @@ Time: date
 
 The plan header rendered in §7 MUST disclaim each adjustment so the user sees the deviation before approving.
 
-Then **mirror the meeting body to `docs/meetings/<YYYY-MM-DD>-<slug>.md`** — the byte-exact source for step 4 extraction.
+Then **mirror the meeting body to `docs/meetings/<YYYY-MM-DD>-<slug>.md`** — the byte-exact source for step 4 extraction. **Only when the input was a Notion URL with no local file.** Local-file input (the file `/upload-meeting` just annotated with `notion.page`) → do NOT write a second file; keep the `notion-fetch` body in memory as the anchor source (pipe tables become `<td>`, `*` bullets become `-`). Two files for one meeting get folded by the user within minutes.
 
 **Variants.** Standalone: skip the source `notion-fetch` and the local mirror; step 4 reads from the raw input text directly. Custom parent: `notion-fetch` the parent for body markdown + (if present) `Tasks` relation list; skip the `docs/meetings/` mirror.
 
@@ -118,6 +136,7 @@ LLM pass over the source content:
     - Deliverable type (e.g. `付款`, `設計`, `規劃書`)
 
     Capture the byte-range of each related section. A single commitment commonly maps to **2–4 sections** (one near the Action Items, others in the discussion body, possibly one in 結論 / 截止期程). Include all of them. The "bounding section the commitment text physically lives under" is usually just `## Action Items` and is the LEAST informative — explicitly EXCLUDE it unless no other section matches.
+  - **Approved design plan** (optional) — when the task follows a design discussion, capture the settled design proposal and its trade-offs verbatim. Keep its heading structure and wording intact so it can be copied under `# Plan` at creation time. Do not infer approval from an unselected list of options.
   - The proposed assignee (resolved from Participants + @-mentions + team roster).
   - A first-pass classification: `LINK` (matches an active task), `DRAFT` (new), `SKIP` (with reason).
 - Skip by default: coordination ("X 與 Y 約時間"), admin chores ("update progress doc"), in-line decisions ("結論：方案2"), items already followed by `<mention-page>` in the body, items assigned to non-engineers.
@@ -210,6 +229,7 @@ N items · X create · Y link · Z skip · W meeting-note annotations
 **CREATE** · <Type> · <Complexity> · @<Display Name> (<member|guest> · <id-prefix>) · <Project or _unset_> · <Release> · Time: <YYYY-MM-DD or _unset_>
 - Source commitment: "<verbatim span — byte-exact, becomes the annotation anchor>"
 - Body: `# Context` + `## <meeting>` + topic section ([expand])
+- Plan: `# Plan` + approved design text verbatim ([expand]) — only when an approved design plan exists
 - Annotate original text with inline mention-page in meeting body
 
 ## 3. <verbatim commitment text>
@@ -241,7 +261,11 @@ Regenerate the plan markdown reflecting all comments in one revision. Re-enter p
 
 ### 9. Execute (only after plan-mode approval)
 
+**Re-`Read` the WHOLE plan file immediately before writing — the user may have hand-edited it during/after approval.** Long iteration means rows get merged, renamed, removed, or re-classified after you last saw them. Build the create-set from the **current** plan bytes, not your earlier in-context copy, and create only the CREATE rows still present. Creating from a stale copy ships **orphaned Notion tasks** (rows the user already deleted) that then need manual cleanup. After creating, backfill each new page id inline onto its plan row (`✅〔notion:<id>〕`) so plan ↔ Notion stay reconciled.
+
 **Parallel body construction (when N ≥ 10 CREATE rows).** Many bodies were left as one-line summaries in the plan per §7 lazy preview. Before firing `notion-create-pages` in §9.1, materialize them: split CREATE rows into ~2 chunks by index and spawn 2 Plan subagents in parallel, each receiving its chunk + the meeting body + the body template from §9.1. Each agent returns `{ task_index, body_markdown }[]`. Main thread merges in order. For `N < 10`, the main thread materializes inline — fan-out overhead exceeds savings.
+
+**Parallel MCP writes.** The main agent owns planning and extraction; the `notion-create-pages` / `notion-update-page` calls themselves can be fanned out. When the sources are several large local files (any file >10KB, or >50KB total), **spawn subagents that read their own files and issue their own MCP calls** — do not pull file bodies through the main thread just to echo them back into a create call. Give each agent its exact property rows and tell it to write, report ids, and stop (no verification loops); the main thread does the §9 read-back.
 
 **Batch size for `notion-create-pages`.** If `N ≤ 50` CREATE rows, send one call. If `N > 50`, split into batches of ≤50 and send in parallel (same parent in each batch); collect task URLs from all responses before §9.1b.
 
@@ -256,6 +280,10 @@ Order matters:
 
    ### 會議記錄 §<related sections, comma-separated>
    [verbatim content from each related section per §4 "Related sections", concatenated in document order, separated by `---` between sections]
+
+   # Plan
+
+   [approved design plan verbatim, preserving headings and trade-offs; omit this entire section when none exists]
    ```
    The literal first character of the `content` string must be `\n`. A single leading newline (which renders as an empty paragraph in the block tree) is enough to protect the H1 — verified empirically. No fixup call is needed afterward.
 
@@ -276,10 +304,10 @@ Order matters:
    - `Assignee=` only for assignees tagged `(member)`. **Omit Assignee on `(guest)` rows** — `create-pages` silently coerces guest IDs to the OAuth user. Handled in step 1b. **Person property write format: JSON array of bare UUID strings** (e.g. `["<uuid>", "<uuid>"]`) — never `<mention-user>` tags (those are read-only).
    - `Project=` inherited from the meeting's Project relation if present.
    - `Release=` current quarter; fall back to most-recent existing option if the current quarter isn't in the enum; skip if absent (flag in plan).
-   - `date:Time:start` = the date resolved in step 4 "Time extraction"; add `date:Time:end` only if step 4 captured a range. **ALWAYS also send `date:Time:is_datetime: 0`** (integer literal `0`, not the `__NO__` checkbox sentinel — that errors with "must be a number (0/1)"). Without it, Notion silently defaults the date to today, even though `create-pages` echoes the input back unchanged. **After the batch, `notion-fetch` one page and spot-check the date** — the create response is not authoritative for date properties.
+   - `date:Time:start` = the date resolved in step 4 "Time extraction"; add `date:Time:end` only if step 4 captured a range. **ALWAYS also send `date:Time:is_datetime: 0`** (integer literal `0`, not the `__NO__` checkbox sentinel — that errors with "must be a number (0/1)"). Without it, Notion silently defaults the date to today, even though `create-pages` echoes the input back unchanged. **Omitting `Time` entirely does NOT leave it blank** — `create-pages` still stamps today; a row that should have no date must be cleared afterwards with an explicit `"date:Time:start": null`. Verify per the batch read-back rule below — the create response is not authoritative for date properties.
    - Leave `Priority`, `Tags`, `Github Link` blank.
 
-1b. **Fan out guest assignees.** For each created task whose resolved assignee is tagged `(guest)`, call `notion-update-page` `update_properties` to set `Assignee`. One call per affected task — `update_properties` accepts guest IDs reliably. Skip entirely when no `(guest)` assignees exist.
+1b. **Fan out guest assignees.** For each created task whose resolved assignee is tagged `(guest)`, call `notion-update-page` `update_properties` to set `Assignee`. One call per affected task — `update_properties` accepts guest IDs reliably. Skip entirely when no `(guest)` assignees exist. **Rows with NO assignee also need a call: send `Assignee: []`** — `create-pages` stamps the creator (OAuth user) whenever Assignee is omitted, and only the SQL read-back catches it. Fold it into the same per-row call that nulls `Time`.
 
    **LINK appends** in step 9.2 below: the appended `## <mention-page url="<source-url>"/>` line uses the source URL (meeting / custom parent). Standalone has no LINK rows by construction (idempotency anchors are inactive → all commitments are CREATE/SKIP).
 
@@ -289,22 +317,23 @@ Order matters:
    - If no `# Context` exists, anchor on top-of-body and insert a fresh `# Context\n\n## ...` block.
    - Call `notion-update-page` with `update_content`.
 
-3. **Set the source page's `Tasks` relation.** `notion-update-page` `update_properties` with the relation extended to include all created + linked task IDs. Notion auto-mirrors the back-reference on the task side (we only write one side). **Skip entirely** when there is no source page (Standalone) or the source page has no `Tasks` relation property (custom-parent variant).
+3. **Set the source page's `Tasks` relation.** **Skip when every row was a CREATE and step 9.1 already passed `Discussions: [<source-url>]`** — the relation auto-mirrors, so this call is redundant. Otherwise `notion-update-page` `update_properties` with the relation extended to include all created + linked task IDs. Notion auto-mirrors the back-reference on the task side (we only write one side). **Skip entirely** when there is no source page (Standalone) or the source page has no `Tasks` relation property (custom-parent variant).
 
 4. **Annotate the source page body.** Build one `notion-update-page` `update_content` call on the **source page** with N ops, one per processed commitment. **Skip entirely** when there is no source page (Standalone) or the source page has no `Tasks` relation property (custom-parent variant).
    - `old_str` = the exact commitment text captured in step 4 (byte-exact from the original body).
+   - **If the commitment came from a markdown table, that anchor will not match.** Notion stores an uploaded pipe table as `<table><tr><td>…</td>`, so a full pipe-table row as `old_str` never matches. **Try the cheap form first: a distinctive text fragment from inside the one cell** (e.g. `最小版本資料對應及缺口清單`) — verified to match with no fetch. Only if that fragment is not unique page-wide, pay for a post-upload `notion-fetch` and anchor on the full cell (`<td>匯入模板新增供應商欄位</td>`). When one cell maps to several tasks, that is **one op carrying several `<mention-page>` tags** — never several ops on the same `old_str` (the first replacement makes the rest miss, and one miss fails the whole call).
    - `new_str` = the **same commitment text followed by a `<mention-page url="<task-url>"/>` reference**, space-separated, inline. Preserves the original wording.
 
    The MCP enforces byte-exact matching. If any op fails (LLM paraphrased the text, body changed since fetch), the whole call fails — surface the failure, don't retry blind.
 
-5. **Refresh the local mirror.** Meeting / treat-as-meeting only. `notion-fetch` the meeting page again and overwrite `docs/meetings/<YYYY-MM-DD>-<slug>.md` with the post-execution body + refresh `last_synced` to reflect the task links added in the body. **Skip** for Standalone and custom-parent variants (no mirror exists).
+5. **Refresh the local file.** Meeting / treat-as-meeting only. **Local-file input → additive edits to the user's file**: append ` <mention-page url="<task-url>"/>` inside each annotated commitment (pipe-table cell: `| <text> <mention-page …/> |`), bump `last_synced`; never overwrite it with the Notion body. **Notion-URL input (mirror written in §3)** → `notion-fetch` the meeting page again and overwrite the mirror with the post-execution body + refresh `last_synced`. **Skip** for Standalone and custom-parent variants.
 
 ### 10. Post-create checkout picker
 
 After successful execution, prompt via `AskUserQuestion` (multi-select):
 
 - Question: "Check out which of these tasks locally?"
-- Options: one per created + linked task (Name as label). Plus an explicit "None — done."
+- Options: `AskUserQuestion` caps at 4. ≤3 tasks → one per task (Name as label) + "None — done". More → grouped buckets: "All N assigned to me" / "All N" / "None — done"; individual picks go through the auto-provided Other (paste URLs).
 
 For each selected URL, dispatch `/fetch-task <url>`. Skipped silently if 0 tasks were affected this run (no checkout prompt at all).
 
@@ -315,14 +344,14 @@ For each selected URL, dispatch `/fetch-task <url>`. Skipped silently if 0 tasks
 - **No Notion writes before plan approval.** User's chat reply against the plan file (step 7) is the gate. Reads are fine.
 - **Never regenerate-overwrite a hand-edited plan file.** Once the user may have touched `docs/tasks/_plan-*.md` (IDE-opened, edited, restructured) or a second session is involved, switch to additive `Edit`s after a fresh live `Read`; never `Write`/`cp` the whole file. Prove additivity by diffing against the just-read bytes, not a backup. One writer per file. (See §7 overwrite caveat — this is the most expensive failure mode this skill has caused: full data loss of a user's multi-source curated plan.)
 - **Never call `ExitPlanMode`.** Popups displace plan text.
-- **Body writes only inside `# Context`.** Never touch `# Description`, `# Updates`, `# Changes Made`, `# Result`, `# Release Notes`, `# Resource`, or legacy dated `# <mention-date>` blocks.
+- **Existing-task body writes only inside `# Context`.** LINK updates never touch `# Plan`, `# Description`, `# Updates`, `# Changes Made`, `# Result`, `# Release Notes`, `# Resource`, or legacy dated `# <mention-date>` blocks. CREATE pages may also receive a new `# Plan` copied verbatim from an approved design discussion; summaries may supplement it but never replace it.
 - **Never overwrite existing properties on existing tasks.** LINK targets only get `# Context` appends + relation inclusion.
-- **Body content is the related sections, verbatim.** All related sections per §4 "Related sections", concatenated in document order. No synthesis — every line must originate verbatim in the source. Transcript fragments are off by default; only included when the user explicitly asks.
+- **`# Context` content is the related sections, verbatim.** All related sections per §4 "Related sections", concatenated in document order. No synthesis — every line must originate verbatim in the source. Transcript fragments are off by default; only included when the user explicitly asks. When present, `# Plan` separately preserves the approved design text verbatim.
 - **LINK appends go through `/fetch-task` first** for the byte-exact `# Context` anchor.
 - **Meeting body annotates, doesn't replace.** `new_str` contains `old_str` as prefix.
 - **Idempotency on re-run.** Anchors: meeting's `Tasks` relation; adjacent `<mention-page>` annotation.
-- **MCP write responses echo input, not persisted state.** After any batch `notion-create-pages` or large `update-page`, `notion-fetch` at least one affected page and spot-check: (1) date properties (see is_datetime quirk in §9.1), (2) body content for transcription errors, (3) relation properties (especially person/people for guests). Treating the create response as proof-of-write has caused silent data corruption in this skill's history.
+- **MCP write responses echo input, not persisted state — and post-create `update_properties` is not durable either.** After any batch create + its follow-up updates, run **ONE `notion-query-data-sources` SQL read-back over every new row** (Name, Status, Type, Time, Assignee, Priority) and repair whatever disagrees. A per-page `notion-fetch` is too expensive at batch size and a blind re-write is not enough: `update_properties` returns `{page_id}` with no error yet silently fails to persist — observed repeatedly on guest `Assignee` (reverts to the OAuth account) and on dates (stay at today). **Filter that read-back on `Name` (or `Status`) — NOT on `url`**: `WHERE url IN ('https://app.notion.com/p/<id>', …)` returns an empty result set with no error, which reads exactly like a failed write. And confirm the title column's real name per data source before selecting it — the Meetings DS has no `Name` column and `SELECT Name` there fails with a 400. Also spot-check one body for transcription errors / truncation. Treating any write response as proof-of-write has caused silent data corruption in this skill's history.
 - **Annotation pass runs only after Notion writes succeed.**
 - **`create-pages` Assignee is best-effort for guests** — silently coerces to OAuth user. Omit on `(guest)` rows; set via `update_properties` post-create (step 9.1b).
-- **Meeting properties never modified** (Date, Participants, Project — all untouched). Task-side `Discussions` relation auto-mirrors when we write meeting's `Tasks` — don't write both sides.
+- **Meeting properties never modified** (Date, Participants, Project — all untouched). The `Tasks` ↔ `Discussions` relation auto-mirrors **in both directions** — write one side only, never both. **Prefer the task side at create time**: pass `Discussions: [<source-url>]` in `notion-create-pages` and the source page's `Tasks` populates for free, making step 9.3 unnecessary. Step 9.3 is then only needed for LINK-only runs (no CREATE rows).
 - **Source page is optional.** Three variants: (1) meeting / treat-as-meeting — full machinery; (2) custom parent — runs 9.3 + 9.4 only if parent has a `Tasks` relation; always skips 9.5 (no mirror); (3) Standalone — no source page, skips 9.3 + 9.4 + 9.5, `# Context` is span-only with no mention-page prefix. Variants (2)-without-relation and (3) disable all idempotency anchors — re-runs duplicate; the plan header must warn.

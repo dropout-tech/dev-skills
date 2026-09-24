@@ -6,7 +6,7 @@ Run steps in order. Stop and surface failures rather than pushing through.
 
 ## 0. Scope check (large diffs only)
 
-Run `git diff --stat HEAD~1..HEAD | tail -1`. If **>25 files or >2000 lines**, ask the user via `AskUserQuestion` which steps to defer — common skips: `/code-review`, `/update-docs`, or E2E in `/verify`. Capture deferred scope in the report's `# Unsolved Issues` or the plan's Verification section. Skip this step for small diffs.
+Run `git diff --stat <this session's commits> | tail -1` — find them by message / `Session:` footer (`git log --grep`), not `HEAD~1..HEAD`: in a multi-session repo HEAD is often someone else's commit. If **>25 files or >2000 lines**, ask the user via `AskUserQuestion` which steps to defer — common skips: `/code-review`, `/update-docs`, or E2E in `/verify`. Capture deferred scope in the report's `# Unsolved Issues` or the plan's Verification section. Skip this step for small diffs — **unless this session already committed or already ran the tests**: then ask (multiSelect) which steps to skip, e.g. `/verify`, `/code-review`, deploy.
 
 ## 1. Verify correctness
 
@@ -31,12 +31,13 @@ Run `git diff --stat HEAD~1..HEAD | tail -1`. If **>25 files or >2000 lines**, a
 ## 4. Generate report
 
 - Invoke `/report` (the `report` skill) to capture what was done — conversation, file changes, actions — into `docs/reports/YYYY-MM-DD-[title].md`.
+- Carry `/verify` evidence into the report: name the checks and manual scenarios, include representative inputs and observed results, and record anything intentionally not exercised. A bare “tests passed” is insufficient for non-trivial feature work.
 - Skip if the change is trivial (typo, single-line fix) or the user opts out.
 - After `/report` completes successfully, delete `REVIEW.md` — its findings are now folded into the report's `# Updates` and `# Unsolved Issues` sections, and leaving it behind causes stale-state confusion on the next wrap-up. If `/report` was skipped, leave `REVIEW.md` in place — step 6 will offer to clean it up.
 
 ## 5. Session hygiene
 
-- After saving the report (and any plan integration), invoke the `rename-session` skill with the report's `YYYY-MM-DD-[title]` as the argument so the session name matches the report. For multiple reports, use the first report's title.
+- After saving the report (and any plan integration), invoke the `rename-session` skill with the report's `YYYY-MM-DD-[title]` as the argument so the session name matches the report. It routes Codex through app-server and Claude Code through its JSONL helper. For multiple reports, use the first report's title.
 
 ## 6. Clean up temp files
 
@@ -64,7 +65,7 @@ Sweep session-created files before commit. Scan untracked files (`git status --s
 
 ## 7. Commit (PR optional)
 
-Apply shared commit hygiene from `./commit.md` (pre-commit safety + smart staging + push fallback). Then Full mode adds:
+**Read `./commit.md` now (`cat` it) — do not commit from memory of it.** It holds the pre-commit safety checks, smart staging rules, the mandatory `Session: <name> (<id>)` footer, and the push fallback; a wrap-up that skipped this read shipped 5 commits without the footer. Then Full mode adds:
 
 - **If a report was generated in step 4**, before staging, use `AskUserQuestion` (header: "Include report?") with question _"Include the report file in this commit?"_ and options:
   - `Defer to /sync-report` (default — keeps the code commit focused; `/sync-report` owns the report commit and can resolve Github Link from HEAD reliably).
@@ -92,6 +93,7 @@ Remember:
 - Never run a deploy command without explicit user confirmation in the same turn.
 - Never re-deploy if Branch B detected an earlier deploy in this session — confirm only.
 - Skip cleanly when CI/CD is detected — don't manufacture a manual deploy.
+- **Schema ships before code.** If the repo has a migrations dir, diff it against the target DB's applied-migrations table *before* deploying and apply what's pending. A stale schema fails at runtime, not at deploy time — the deploy "succeeds" and pages 500 days later.
 
 ### Branch A — CI/CD handles deploy → skip
 
@@ -124,7 +126,7 @@ Use `AskUserQuestion` (header: "Deployed?") with question _"Have you deployed th
   2. Show the user the doc excerpt, the exact command(s) to run, and any preconditions the docs mention (env vars, login state, branch).
   3. **Use `AskUserQuestion` (header: "Run deploy?") to confirm execution** — options "Yes, run it" / "No, stop". Never run a deploy command without an explicit popup confirmation in the same turn.
   4. On confirm, execute. On failure, surface output and stop — do not retry or fall back to a different command.
-  5. After successful deploy, if a URL was emitted or detected from docs, print `Reminder: verify deploy at <url>`.
+  5. After a successful deploy, **fetch a real page before calling it deployed** — an authenticated GET that actually renders, not just the root URL. `200` alone proves nothing: RSC prefetches (`?_rsc=`), `HEAD`, and unauthenticated `307`s to a login page all return success without running the page's queries. Pair it with the platform's error log. Until that fetch is green, say "deployed, not yet verified".
 
 - If no deploy docs are found in the "no" branch: tell the user `No deploy docs found. Add deploy instructions to AGENTS.md or docs/deploy.md and re-run wrap-up.` and end.
 - Never invent deploy commands. If docs are silent, stop and tell the user — don't guess `yarn deploy`, `npm run deploy`, `make deploy`, etc.
@@ -133,6 +135,7 @@ Use `AskUserQuestion` (header: "Deployed?") with question _"Have you deployed th
 
 - Always invoke `/improve` (the `improve` skill) to surface refinement suggestions from session friction — skill instructions, workflow sequencing, user-instructions analysis, and `REVIEW.md` findings.
 - If suggestions are surfaced, `/improve` owns its own scope prompts (Global / Org / Local) and applies edits inline.
+- `/improve` also **commits the skill repo it edited** (its own Wrap up step). Step 7 ran before this, so don't expect it to have covered those files — and don't re-commit them here.
 
 ## Guardrails
 
