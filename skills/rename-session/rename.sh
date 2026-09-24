@@ -3,20 +3,32 @@
 # to its JSONL file. Mirrors the built-in /rename command's side-effect.
 set -e
 
+if [ -n "${CODEX_THREAD_ID:-}" ] || [ -n "${CODEX_SESSION_ID:-}" ]; then
+  echo "rename.sh supports Claude Code only; use the Codex host rename capability." >&2
+  exit 2
+fi
+
 TITLE="$1"
 [ -z "$TITLE" ] && { echo "usage: rename.sh <title>" >&2; exit 1; }
 
-PROJECT_DIR="$HOME/.claude/projects/$(pwd | sed 's|/|-|g')"
-
 SID="${CLAUDE_CODE_SESSION_ID:-$CLAUDE_SESSION_ID}"
-if [ -n "$SID" ] && [ -f "$PROJECT_DIR/$SID.jsonl" ]; then
-  SESSION_FILE="$PROJECT_DIR/$SID.jsonl"
+SESSION_FILE=""
+# Look up by id across all projects — the shell's pwd may have drifted into a subdirectory.
+# A migrated/backed-up project dir can hold a stale copy of the same id: take the newest, say so.
+if [ -n "$SID" ]; then
+  MATCHES=$(ls -t "$HOME"/.claude/projects/*/"$SID".jsonl 2>/dev/null || true)
+  SESSION_FILE=$(printf '%s\n' "$MATCHES" | head -1)
+  if [ "$(printf '%s\n' "$MATCHES" | grep -c .)" -gt 1 ]; then
+    echo "Warning: $SID found in several projects; renaming the newest:" >&2
+    printf '%s\n' "$MATCHES" | sed 's/^/  /' >&2
+  fi
+fi
+if [ -n "$SESSION_FILE" ]; then
   SESSION_ID="$SID"
 else
-  SESSION_FILE=$(ls -t "$PROJECT_DIR"/*.jsonl 2>/dev/null | head -1)
-  [ -z "$SESSION_FILE" ] && { echo "no session file found in $PROJECT_DIR" >&2; exit 1; }
-  SESSION_ID=$(basename "$SESSION_FILE" .jsonl)
-  echo "warning: CLAUDE_CODE_SESSION_ID not set; guessing newest jsonl ($SESSION_ID) — may rename wrong session" >&2
+  [ -n "$SID" ] || { echo "An explicit Claude session ID is required; refusing to guess the newest transcript." >&2; exit 2; }
+  echo "No Claude transcript found for session $SID" >&2
+  exit 2
 fi
 
 if command -v jq >/dev/null 2>&1; then

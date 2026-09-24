@@ -1,14 +1,38 @@
 ---
 name: report
-description: Analyze the current chat conversation, file changes, and actions taken to create a comprehensive report. Saves to docs/reports/YYYY-MM-DD-[title].md
-argument-hint: "[optional title]"
+description: Analyze the current chat conversation, file changes, and actions taken to create a comprehensive report. Saves to docs/reports/YYYY-MM-DD-[title].md. Also exports the raw conversation transcript to markdown via `/report transcript`.
 ---
+
+**Arguments:** `[optional title] | transcript [--full]`
 
 Analyze the current chat conversation, file changes, and actions taken to create a comprehensive report using the specified template.
 
 Save the report as `docs/reports/YYYY-MM-DD-[title].md`
 
 The date should be the date when the task is mainly worked on, not the date when the report is generated.
+
+## Transcript Export (`/report transcript`)
+
+When the user asks for the **raw conversation** rather than a synthesized report
+("export this chat", "dump the transcript", `/report transcript`), skip every
+other step in this skill and do this instead:
+
+1. **Rename first** (current session only — skip when `--session` targets another one). Run the adapter's `show`; if the session does not already have an intentional title, invoke `rename-session` with no argument. Renaming before exporting makes the default filename match the title.
+2. **Export:**
+   ```bash
+   python3 <dev-skills-root>/bin/session-adapter.py export [--full] [-o PATH] [--session ID] [--host claude|codex] [--since ISO]
+   ```
+
+- Default output: `docs/reports/YYYY-MM-DD-<title>-transcript.md`, relative to the cwd.
+- Default body: user prompts (incl. ones sent mid-turn, `AskUserQuestion` answers)
+  + assistant prose; IDE wrappers, system-reminders and tool traffic stripped.
+- `--full` adds tool activity and truncated output according to the host's exporter.
+- `--since` is supported by the Claude backend.
+- Session resolution is `--session` then the detected host's session ID environment variable. The adapter refuses to guess the newest transcript.
+
+Do not read host storage or hand-assemble the transcript yourself—the adapter delegates to the host implementation. Claude readable exports prefer the redacted session log when one exists and fall back to `export-transcript.py`; full exports use `export-transcript.py`. Codex exports page persisted turns through app-server and never parse rollout JSONL or mutate SQLite. A sandboxed Codex host may require approval because app-server opens state under `~/.codex`.
+This is an export, not a report: no template, no plan integration.
+Don't commit transcript exports by default; they are views for sharing.
 
 ## Pre-flight: split decision
 
@@ -26,13 +50,16 @@ For multiple reports: §0 (target file) and the template choice apply per report
 
 Before generating, decide whether this report is **appending to an existing `docs/tasks/<slug>.md`** (Notion-task lifecycle path) or **synthesizing fresh from conversation** (today's behavior).
 
+0. **Came from a task plan? Fetch first.** If the session implemented work off a `docs/tasks/_plan-*.md` (a `/create-tasks` plan) and no `docs/tasks/<slug>.md` matches yet, **dispatch `/fetch-task` for the tasks the plan created/linked before resolving the target** — then continue from step 1. `/create-tasks`' checkout picker only runs in the session that created the tasks, so a hand-off session arrives with the plan but no task files; without this, target resolution falls through to "fresh report" and the per-task path (§"Target = task file", and the multi-task split below) is silently unavailable — the symptom is one report covering N tasks that then can't be attached to any of them.
 1. **Scan the conversation** for explicit Notion task URLs or task-name mentions (e.g. "working on auto-notification").
 2. **Match against `docs/tasks/*.md`** via frontmatter `notion.page` URL or filename slug.
-3. **If matched** → use that file as the target. Skip to "Target = task file" below.
+3. **If matched** → use that file as the target. Skip to "Target = task file" below. A mention (e.g. the file @-attached at session start) is not proof the work belongs there — still skim the other `docs/tasks/*.md` names, and if one fits the actual work better, ask before appending (seen: iOS-build work appended to an on-site-test task, then moved to the "upload iOS test build" task).
 4. **Otherwise**, scan `docs/tasks/*.md` for files with `notion.page` frontmatter:
    - 0 matches → fresh report (today's behavior); see "Target = fresh".
    - 1 match → use it as the target.
    - 2+ matches → prompt via `AskUserQuestion` which file to report on; offer a "fresh report (no task file)" escape hatch.
+
+**Task file and an existing report share the same `notion.page` → merge, don't ask.** If a `docs/tasks/<slug>.md` and a `docs/reports/*.md` carry the same `notion.page` (typical when a report was hand-written before the task was fetched, then synced to that task), the lifecycle result is ONE file: `docs/reports/<YYYY-MM-DD>-<slug>.md` = task frontmatter + `# Context` + the report's full body, with the two originals removed (back them up to the scratchpad, not deleted outright). Do not offer the "append delta vs new file" choice in this case — the user's expectation is the merged task-lifecycle file.
 
 **When the session's work genuinely spans multiple fetched tasks** (e.g. you `/fetch-task`'d two tasks and implemented both — a player-side and a host-side of one feature), don't force-pick one or synthesize a single fresh report: **split per task**. Append the relevant slice of `# Changes Made` / `# Result` to *each* matched task file (cross-reference the sibling report), then run the per-target steps (rename into `docs/reports/`, plan-attach) once per file. The "pick one" prompt is for ambiguity over *which* task; it is not for collapsing multi-task work into one report.
 
@@ -52,9 +79,15 @@ No task file detected → **first scan `docs/reports/` for a very recent report 
 
 ## Report Generation Process
 
-1. **Analyze Chat History**: Review the conversation to capture only the core issue, discussion points and decisions made, solutions attempted and their outcomes
+1. **Analyze Chat History**: Review the conversation to capture only the core issue, discussion points and decisions made, solutions attempted and their outcomes. In Claude Code, if the session has a log (`python3 <dev-skills-root>/bin/session-log.py show`), read it first: `[user]`/`[ask]` are the user's exact words (quote decisions verbatim from there, don't paraphrase from memory), `[note]` are decisions recorded as they happened, `[write]` is the authoritative file list, `[error]` the friction, `[web]` every URL fetched or searched (including by subagents) — the `# References` section comes from there, not from memory. This works after a compaction too, when the conversation itself is only a summary.
+   In Codex, refresh/read `python3 <dev-skills-root>/bin/session-adapter.py log --stdout`.
+   Local notes survive refreshes. Tool output is abbreviated; `[write]` covers only
+   completed `fileChange` events. Supplement shell/MCP writes and missing details
+   with actual tool results and fresh scoped diffs; do not treat the log as complete
+   file attribution or as a snapshot/hunk ledger. Use `session-adapter.py export`
+   for the transcript branch above.
 2. **Examine File Changes**: Mention only relevant changes and the main purpose of the changes
-3. **Summarize Actions Taken**: commands executed, deployments, or test runs
+3. **Summarize Actions Taken**: commands executed, deployments, and test runs. Preserve the evidence needed to assess the result: command or scenario, representative input, expected behavior, actual outcome, and any limitation.
 
 ## Available Report Templates
 
@@ -88,7 +121,7 @@ If there are no issues in a bucket, omit that bucket's content — do not stub t
 After writing the report, if a plan was used during the conversation:
 
 1. Identify the plan file path (e.g. `~/.claude/plans/some-plan-name.md`)
-2. Run `bash <skill-base>/attach-plan.sh <mode> <plan> <report>` where `<skill-base>` is announced at skill load. If unknown, fallback: `find ~/agent-skills ~/.claude -name attach-plan.sh -path '*/report/*' | head -1`.
+2. Run `bash <skill-base>/attach-plan.sh <mode> <plan> <report>` where `<skill-base>` is announced at skill load. Resolve the installed `SKILL.md` symlink and use its sibling `attach-plan.sh`; do not pick an arbitrary cached copy.
    - `<mode>` is `prepend` for Task / Bug Fix reports, `append` for Planning reports
 
 Do NOT read the plan file yourself. The script handles everything.
@@ -105,11 +138,12 @@ After saving the report (and any plan integration), invoke the `rename-session` 
 ## Report Writing Guidelines
 
 1. **Prioritize final file changes**: User may make edits to the file out of the conversation history. Read relevant files to understand the final code.
-2. **Be short**: Each section should be 1–3 sentences max. Description should be brief.
-   instead of pasting the whole code, try to use high level descriptions in bullet point form. only include lines of code that is relevant and significant.
+2. **Scale detail to the work**: Keep simple changes brief. For feature work, describe each material behavior and implementation area in enough detail that a reader who did not see the session can tell what changed. Use focused bullets instead of pasting code; include only relevant snippets.
 3. **Be Specific**: Include exact error messages, file paths, and code snippets only if relevant
 4. **Step-by-Step**: Show what was tried and what finally worked
 5. **Include Context**: Explain why certain decisions were made if necessary.
 6. **Optional**: Add TODOs if follow-up work is needed
 7. **Complete**: Make sure everything you've done is included in the report, not the recent one, but the full conversation
 8. **Track issue resolution**: solved issues from `/code-review` or the conversation go in `# Updates`; deferred issues go in `# Unsolved Issues`. Do not let either disappear from the project's record.
+9. **Link the session**: every report and task file gets a `session:` frontmatter key — `session: <title> (<id>)`, identity from `python3 <dev-skills-root>/bin/session-adapter.py show --json` (`id` and `name`; use the report title if unnamed) — use `git log --grep=<id>` for attributed commits; only Claude IDs refer to `~/.claude/projects/<proj>/<id>.log.md`. Multiple sessions → comma-separated. Add the key to existing frontmatter, or create a minimal `---` block if the file has none.
+10. **Make verification reviewable**: Do not collapse non-trivial verification into “tests passed.” List each command or manual scenario, what it exercised, and its observed result. For table-driven or browser checks, retain representative inputs and precedence/error cases. State what was deliberately not exercised, such as a destructive write or production deployment.

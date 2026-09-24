@@ -10,7 +10,7 @@ This skill runs the verification checks defined in the implementation plan. It i
 ## 1. Locate the plan
 
 - Look for the implementation plan file the user has been working from. Common locations:
-  - `~/.claude/plans/*.md` (most recently modified is usually correct)
+  - Claude Code only: `~/.claude/plans/*.md`, matched to this task rather than chosen by modification time
   - A planning doc the user explicitly pointed to in this conversation
   - A `docs/plans/` or similar folder in the project
 - If multiple candidates exist and it's ambiguous, ask the user which plan to verify against. Don't guess.
@@ -55,6 +55,7 @@ If the plan specifies an exact command, use it verbatim; do not substitute.
 ## Guardrails
 
 - Never author new tests. If the plan's Test plan is incomplete or missing items, surface the gap to the user — don't fill it in silently.
+- **Coverage check before reporting done:** enumerate every write path the change introduced (create, update, archive/delete, import…) and confirm each has one exercised round-trip in the plan. A test plan that only walks *create* is incomplete — surface the missing paths (e.g. "update never exercised") rather than declaring pass.
 - Never edit code to make a failing test pass. Just run and report.
 - If no plan or no Test plan section exists, stop and ask.
 - Tests are non-negotiable — flag clearly when something can't be run, don't silently skip.
