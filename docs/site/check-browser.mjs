@@ -99,7 +99,7 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('#demo-meeting-notes [data-meeting-step]').length"), 5);
   assert.equal(await evaluate("document.querySelectorAll('#demo-meeting-notes .skill-visual').length"), 1, "one information-to-work diagram, not separate skill sections");
   assert.equal(await evaluate("document.querySelectorAll('#demo-meeting-notes .meeting-flow-node').length"), 4);
-  assert(await evaluate("document.querySelector('.titlebar__title').textContent.includes('foojiayin')"));
+  assert(await evaluate("document.querySelector('.titlebar__title').textContent.includes('dropout-tech')"));
   assert(await evaluate("[...document.querySelectorAll('.skill-related')].every(group => group.hidden)"));
   assert(await evaluate("getComputedStyle(document.querySelector('.chat-ready')).display !== 'none'"));
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.chat-lifecycle [data-stage]')].map(e => e.textContent)"), ["Source", "Prepare", "Wrap-up", "Memory"]);
@@ -122,8 +122,8 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('.github-branch-path .branch-node').length"), 3);
   assert.equal(await evaluate("document.querySelectorAll('#demo-wrap-up .skill-visual').length"), 0, "wrap-up uses the two timelines instead of a duplicate diagram");
   assert.equal(await evaluate("document.querySelectorAll('.method-layout').length"), 5, "prepare, quality, handoff, memory and improvement have dedicated compositions");
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('#install .install-method > div:first-child .install-commands code')].map(el => el.textContent)"), ["/plugin marketplace add FooJiaYin/dev-skills", "/plugin install dev-skills"], "ending shows the real Claude Code install sequence");
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('#install .install-method > div:last-child .install-commands code')].map(el => el.textContent)"), ["git clone https://github.com/FooJiaYin/dev-skills.git ~/dev-skills", "mkdir -p ~/.codex/skills", 'for skill in ~/dev-skills/skills/*; do ln -s "$skill" ~/.codex/skills/; done'], "ending gives Codex runnable clone and safe symlink commands");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('#install .install-method > div:first-child .install-commands code')].map(el => el.textContent)"), ["/plugin marketplace add dropout-tech/dev-skills", "/plugin install dev-skills"], "ending shows the real Claude Code install sequence");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('#install .install-method > div:last-child .install-commands code')].map(el => el.textContent)"), ["git clone https://github.com/dropout-tech/dev-skills.git ~/dev-skills", "mkdir -p ~/.codex/skills", 'for skill in ~/dev-skills/skills/*; do ln -s "$skill" ~/.codex/skills/; done'], "ending gives Codex runnable clone and safe symlink commands");
   assert.equal(await evaluate("document.querySelector('#install .install-download').dataset.demoReplay"), "install", "ending opens a simulated installation conversation, not a ZIP download");
   assert(await evaluate("document.querySelector('#install .install-readme').href.endsWith('/dev-skills#install')"), "complete installation guide remains available");
   assert.equal(await evaluate("document.querySelectorAll('.handoff-summary__track > div').length"), 3, "handoff shows three distinct report outcomes");

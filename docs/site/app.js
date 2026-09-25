@@ -28,7 +28,7 @@
   ];
   const installConversations = {
     claude: [
-      ["user", "/plugin marketplace add FooJiaYin/dev-skills"],
+      ["user", "/plugin marketplace add dropout-tech/dev-skills"],
       ["tool", "Claude Code · 登錄 dev-skills 來源（網站模擬）"],
       ["assistant", "來源加好了。接著輸入 /plugin install dev-skills，把 skill 安裝進 Claude Code。"],
       ["user", "/plugin install dev-skills"],
@@ -38,7 +38,7 @@
     codex: [
       ["user", "我想在 Codex 用 dev-skills。"],
       ["assistant", "先把整份 repo 留在本地；有些 skill 會用到裡面的 bin/ 工具。接著把 skills 連結到 Codex 的目錄。"],
-      ["tool", "示範指令 · git clone https://github.com/FooJiaYin/dev-skills.git ~/dev-skills"],
+      ["tool", "示範指令 · git clone https://github.com/dropout-tech/dev-skills.git ~/dev-skills"],
       ["tool", "示範指令 · mkdir -p ~/.codex/skills"],
       ["tool", "示範指令 · for skill in ~/dev-skills/skills/*; do ln -s \"$skill\" ~/.codex/skills/; done"],
       ["assistant", "完成連結後，可以在 Codex 試試 $sync 或 $wrap-up。這裡只是對話示範，沒有替你執行指令。"]
@@ -287,8 +287,8 @@
     <div class="section-kicker">從今天遇到的那件事開始</div>
     <h2 id="install-title">讓你的 agent 認識 dev-skills。</h2>
     <p>不用一次學完所有流程。先安裝，下一次開工時試試 <code>/sync</code>；要收好這輪工作，就試試 <code>/wrap-up</code>。</p>
-    <div class="install-method"><div><h3>Claude Code</h3><p>在對話輸入框依序送出：</p><div class="install-commands"><code>/plugin marketplace add FooJiaYin/dev-skills</code><code>/plugin install dev-skills</code></div><small>安裝後重啟 Claude Code，讓 skill 載入。</small></div><div><h3>Codex</h3><p>在自己的電腦執行，保留整份 repo，再連結 skill：</p><div class="install-commands"><code>git clone https://github.com/FooJiaYin/dev-skills.git ~/dev-skills</code><code>mkdir -p ~/.codex/skills</code><code>for skill in ~/dev-skills/skills/*; do ln -s "$skill" ~/.codex/skills/; done</code></div><small>如果已下載 repo，跳過第一行；已有同名 skill 不會被覆寫。</small><a class="install-guide" href="https://github.com/FooJiaYin/dev-skills#codex-local-clone" target="_blank" rel="noopener noreferrer">查看 Codex 安裝細節 ↗</a></div></div>
-    <div class="install-actions"><button class="install-download playback-cta" type="button" data-demo-replay="install">在右邊看安裝示範 <span aria-hidden="true">↗</span></button><a class="install-readme" href="https://github.com/FooJiaYin/dev-skills#install" target="_blank" rel="noopener noreferrer">完整安裝說明 ↗</a></div>
+    <div class="install-method"><div><h3>Claude Code</h3><p>在對話輸入框依序送出：</p><div class="install-commands"><code>/plugin marketplace add dropout-tech/dev-skills</code><code>/plugin install dev-skills</code></div><small>安裝後重啟 Claude Code，讓 skill 載入。</small></div><div><h3>Codex</h3><p>在自己的電腦執行，保留整份 repo，再連結 skill：</p><div class="install-commands"><code>git clone https://github.com/dropout-tech/dev-skills.git ~/dev-skills</code><code>mkdir -p ~/.codex/skills</code><code>for skill in ~/dev-skills/skills/*; do ln -s "$skill" ~/.codex/skills/; done</code></div><small>如果已下載 repo，跳過第一行；已有同名 skill 不會被覆寫。</small><a class="install-guide" href="https://github.com/dropout-tech/dev-skills#codex-local-clone" target="_blank" rel="noopener noreferrer">查看 Codex 安裝細節 ↗</a></div></div>
+    <div class="install-actions"><button class="install-download playback-cta" type="button" data-demo-replay="install">在右邊看安裝示範 <span aria-hidden="true">↗</span></button><a class="install-readme" href="https://github.com/dropout-tech/dev-skills#install" target="_blank" rel="noopener noreferrer">完整安裝說明 ↗</a></div>
     <div id="demo-install"><div class="inline-demo" aria-label="安裝 dev-skills 模擬對話"><div class="inline-title"><b class="chat-host-name">Claude Code</b><label class="host-picker"><span class="sr-only">切換對話示範工具</span><select data-host-picker><option value="claude">Claude Code</option><option value="codex">Codex</option></select></label></div><div class="chat-thread" role="log" aria-label="安裝示範對話" aria-live="off"></div><div class="chat-compose chat-compose--inline"><span>›</span><div>使用者輸入也會自動演出</div></div><div class="inline-controls"><button type="button" data-inline-pause="install">暫停</button><button type="button" data-inline-complete="install">立即顯示完整對話</button><button type="button" data-inline-replay="install">重播</button></div><small>虛構示範 · 不會真的安裝或修改你的電腦</small></div></div>
   </section>`);
 
