@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="160" viewBox="0 0 720 160" fill="none">
+  <defs>
+    <linearGradient id="g-tn" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#153D61"/>
+      <stop offset="50%" stop-color="#1B6E80"/>
+      <stop offset="100%" stop-color="#3CA59E"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(20, 20) scale(1.5)">
+    <path d="M62 40 A22 22 0 1 1 40 18" stroke="url(#g-tn)" stroke-width="9" stroke-linecap="round"/>
+    <path d="M49 20 A22 22 0 0 1 60 31" stroke="#F09336" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <text x="168" y="96" font-family="'Archivo', 'Inter', sans-serif" font-size="68" font-weight="900" letter-spacing="-1.5" fill="#153D61"><tspan fill="#3CA59E">Do</tspan>Business</text>
+  <text x="171" y="128" font-family="'Noto Sans TC', sans-serif" font-size="20" font-weight="700" letter-spacing="6" fill="#475E6E">琢奧商務與營運中樞</text>
+</svg>

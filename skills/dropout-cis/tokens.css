@@ -1,0 +1,44 @@
+:root {
+  /* 1. Dual-White Surfaces & Anchor */
+  --dropout-white: #FFFFFF;
+  --dropout-canvas: #EEF8F7;
+  --dropout-subtle: #F7FBFA;
+  --dropout-navy: #153D61;
+
+  /* 2. Brand & Functional Accents */
+  --dropout-teal: #3CA59E;
+  --dropout-teal-light: #4C9E9C;
+  --dropout-teal-text: #23746F; /* WCAG AA on white */
+  --dropout-ocean: #1B6E80;
+  --dropout-amber: #F09336;
+  --dropout-amber-hover: #DE8226;
+  --dropout-amber-glow: #B67D48;
+  --dropout-coral: #C94A38;
+
+  /* 3. Typography & Borders */
+  --dropout-ink: #0F293A;
+  --dropout-slate: #475E6E;
+  --dropout-muted: #647B89;
+  --dropout-border: #D5E6E5;
+  --dropout-portrait-bg: #DCEBEA;
+
+  /* 4. Radii, Elevation & Calm Motion */
+  --dropout-radius-card: 18px;
+  --dropout-radius-control: 10px;
+  --dropout-shadow-card: 0 8px 24px rgba(21, 61, 97, 0.06);
+  --dropout-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dropout-duration: 200ms;
+}
+
+.dropout-aurora {
+  background:
+    radial-gradient(circle at 90% 20%, rgba(240, 147, 54, 0.45) 0%, rgba(182, 125, 72, 0.14) 36%, transparent 62%),
+    linear-gradient(125deg, #4C9E9C 0%, #1B6E80 54%, #153D61 100%);
+}
+
+.dropout-white-mist {
+  background:
+    radial-gradient(circle at 86% 14%, rgba(60, 165, 158, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 12% 76%, rgba(240, 147, 54, 0.05) 0%, transparent 40%),
+    #FFFFFF;
+}

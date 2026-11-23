@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="160" viewBox="0 0 700 160" fill="none">
+  <defs>
+    <linearGradient id="g-tn" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#153D61"/>
+      <stop offset="50%" stop-color="#1B6E80"/>
+      <stop offset="100%" stop-color="#3CA59E"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(20, 20) scale(1.5)">
+    <rect x="16" y="18" width="12" height="44" rx="6" fill="url(#g-tn)"/>
+    <circle cx="50" cy="40" r="16" stroke="#F09336" stroke-width="8"/>
+  </g>
+  <text x="168" y="96" font-family="'Archivo', 'Inter', sans-serif" font-size="68" font-weight="900" letter-spacing="-1.5" fill="#153D61"><tspan fill="#3CA59E">One</tspan>Office</text>
+  <text x="171" y="128" font-family="'Noto Sans TC', sans-serif" font-size="20" font-weight="700" letter-spacing="6" fill="#475E6E">一體化企業整合辦公中樞</text>
+</svg>

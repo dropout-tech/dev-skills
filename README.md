@@ -115,6 +115,7 @@ These skills bridge between local code/docs and a shared Notion workspace (Roadm
 |---|---|
 | [find-session](skills/find-session/SKILL.md) | Search Claude Code or Codex sessions by topic or file-change evidence; `--open` refreshes/opens the log. Searches both by default; `--host` filters the source. |
 | [headless-shots](skills/headless-shots/SKILL.md) | Screenshot or drive a locally running web app via headless Chrome + CDP with a minted login cookie — fallback when the Playwright MCP browser is locked; write-path checks verified against the DB. |
+| [dropout-cis](skills/dropout-cis/SKILL.md) | Enforce DropOut Tech CIS v4.1 (Dual-White `#FFFFFF`/`#EEF8F7`, DropOut Aurora, `DO` sub-brand lockups, Anti-AI-Slop Micro-UI & bespoke SVG rules, and ADHD-friendly UI standards). |
 
 ## Folder Structure
 
